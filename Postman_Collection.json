@@ -1,0 +1,90 @@
+{
+	"info": {
+		"_postman_id": "89b9e5d4-4f5a-4e2b-b9d1-3e4f5a6b7c8d",
+		"name": "Gestion Suivi Documentaire API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+						},
+						"url": { "raw": "{{base_url}}/api/login/", "host": ["{{base_url}}"], "path": ["api", "login", ""] }
+					}
+				},
+				{
+					"name": "List Users (Admin)",
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/users/", "host": ["{{base_url}}"], "path": ["api", "users", ""] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Transit - BEX",
+			"item": [
+				{
+					"name": "Create BEX",
+					"request": {
+						"method": "POST",
+						"header": [ { "key": "Content-Type", "value": "application/json" } ],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"numero_bex\": \"BEX-2026-001\",\n    \"type_bex\": \"MARITIME\",\n    \"fournisseur\": \"LABOREX FRANCE\",\n    \"date_enlevement_prevue\": \"2026-05-20\",\n    \"items\": [\n        {\n            \"numero_conteneur\": \"CONT-123\",\n            \"designation_produit\": \"Médicaments divers\",\n            \"quantite\": 50,\n            \"facture_fcfa\": 500000\n        }\n    ]\n}"
+						},
+						"url": { "raw": "{{base_url}}/api/transit/bex/", "host": ["{{base_url}}"], "path": ["api", "transit", "bex", ""] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Transit - ADI",
+			"item": [
+				{
+					"name": "List ADI",
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/transit/adi/", "host": ["{{base_url}}"], "path": ["api", "transit", "adi", ""] }
+					}
+				},
+				{
+					"name": "Import ADI Excel",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [ { "key": "file", "type": "file", "src": [] } ]
+						},
+						"url": { "raw": "{{base_url}}/api/transit/adi/import-excel/", "host": ["{{base_url}}"], "path": ["api", "transit", "adi", "import-excel", ""] }
+					}
+				}
+			]
+		},
+		{
+			"name": "Transit - CCPQ",
+			"item": [
+				{
+					"name": "List CCPQ",
+					"request": {
+						"method": "GET",
+						"url": { "raw": "{{base_url}}/api/transit/ccpq/", "host": ["{{base_url}}"], "path": ["api", "transit", "ccpq", ""] }
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{ "key": "base_url", "value": "http://127.0.0.1:8000" }
+	]
+}
