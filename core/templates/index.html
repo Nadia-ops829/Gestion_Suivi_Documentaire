@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laborex-Burkina | Système Documentaire</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --secondary: #ec4899;
+            --dark: #0f172a;
+            --glass: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top left, #1e1b4b, #0f172a);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        
+        /* --- UI Elements --- */
+        .btn {
+            padding: 0.75rem 1.5rem; border-radius: 12px; border: none; cursor: pointer;
+            font-weight: 600; transition: all 0.3s; color: white; display: inline-flex; align-items: center; gap: 0.5rem;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-light)); }
+        .btn-secondary { background: var(--glass); border: 1px solid var(--glass-border); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(0,0,0,0.3); }
+
+        input, select, textarea {
+            width: 100%; padding: 0.8rem 1rem; background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border); border-radius: 12px; color: white; margin-top: 0.5rem;
+        }
+
+        /* --- Modals --- */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none;
+            justify-content: center; align-items: center; z-index: 1100;
+        }
+        .modal-content {
+            background: #1e293b; padding: 2.5rem; border-radius: 24px; width: 100%; max-width: 800px;
+            border: 1px solid var(--glass-border); max-height: 90vh; overflow-y: auto;
+        }
+
+        /* --- Layout --- */
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .nav-tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 1rem; }
+        .tab-btn { background: none; border: none; color: #94a3b8; cursor: pointer; font-weight: 600; padding: 0.5rem 1rem; border-radius: 8px; transition: 0.3s; }
+        .tab-btn.active { background: var(--glass); color: white; }
+
+        .table-wrap { background: var(--glass); border-radius: 20px; overflow: hidden; border: 1px solid var(--glass-border); margin-bottom: 1.5rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: rgba(0,0,0,0.3); padding: 1rem; text-align: left; color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
+        td { padding: 1rem; border-bottom: 1px solid var(--glass-border); }
+
+        .badge { padding: 0.3rem 0.8rem; border-radius: 99px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        .status-pending { background: rgba(234, 179, 8, 0.15); color: #fbbf24; }
+        .status-success { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .status-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+        .hidden { display: none !important; }
+        .form-section { border-top: 1px solid var(--glass-border); margin-top: 1.5rem; padding-top: 1.5rem; }
+        .section-title { font-size: 0.9rem; font-weight: 700; color: var(--primary-light); margin-bottom: 1rem; text-transform: uppercase; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+
+    <!-- Login -->
+    <div id="loginOverlay" class="login-overlay" style="position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); z-index: 2000; display: flex; justify-content: center; align-items: center;">
+        <div class="glass-card" style="background: rgba(255,255,255,0.05); padding: 3rem; border-radius: 24px; width: 400px; border: 1px solid rgba(255,255,255,0.1);">
+            <h1 style="text-align: center; margin-bottom: 2rem;">Laborex Ops</h1>
+            <form id="loginForm">
+                <div style="margin-bottom: 1.5rem;"><label>Utilisateur</label><input type="text" id="username" required></div>
+                <div style="margin-bottom: 2rem;"><label>Mot de passe</label><input type="password" id="password" required></div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Connexion</button>
+                <p id="loginError" style="color: #f87171; text-align: center; margin-top: 1rem;" class="hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="app" class="container hidden">
+        <header>
+            <div><h2 id="welcomeText">Bonjour</h2><p id="userRoleText" style="color: #94a3b8; font-size: 0.9rem;"></p></div>
+            <button onclick="logout()" class="btn btn-secondary">Déconnexion</button>
+        </header>
+
+        <nav class="nav-tabs">
+            <button class="tab-btn active" onclick="switchTab('transit')">BEX</button>
+            <button class="tab-btn" onclick="switchTab('adi')">ADI</button>
+            <button class="tab-btn" onclick="switchTab('ccpq')">CCPQ</button>
+            <button id="usersTabBtn" class="tab-btn hidden" onclick="switchTab('users')">Utilisateurs</button>
+        </nav>
+
+        <div id="tab-transit">
+            <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+                <button class="btn btn-primary" onclick="showModal('bexModal')">+ Nouveau BEX</button>
+                <button class="btn btn-secondary" onclick="showImportModal('bex')">Import Excel</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>N° BEX</th><th>Type</th><th>Fournisseur</th><th>Date Création</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody id="bexTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-adi" class="hidden">
+            <div style="display:flex;gap:1rem;margin-bottom:2rem">
+                <button class="btn btn-primary" onclick="showModal('adiModal')">+ Nouvelle ADI</button>
+                <button class="btn btn-secondary" onclick="showImportModal('adi')">Import Excel</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>N° ADI</th><th>Fournisseur</th><th>Pays</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody id="adiTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-ccpq" class="hidden">
+            <div style="display:flex;gap:1rem;margin-bottom:2rem">
+                <button class="btn btn-primary" onclick="showModal('ccpqModal')">+ Nouveau CCPQ</button>
+                <button class="btn btn-secondary" onclick="showImportModal('ccpq')">Import Excel</button>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>N° CCPQ</th><th>Date Dépôt</th><th>Résultat</th><th>Statut</th><th>Actions</th></tr></thead>
+                    <tbody id="ccpqTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-users" class="hidden"><button class="btn btn-primary" onclick="showModal('userModal')" style="margin-bottom:2rem">+ Créer un compte</button><div class="table-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Rôle</th><th>Statut</th></tr></thead><tbody id="usersTable"></tbody></table></div></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="statusModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <h3>Modifier le Statut</h3>
+            <form id="statusForm">
+                <input type="hidden" id="status_type">
+                <input type="hidden" id="status_id">
+                <label>Nouveau Statut</label>
+                <select id="status_select" required></select>
+                <button type="submit" class="btn btn-primary" style="margin-top:2rem; width:100%">Mettre à jour</button>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('statusModal')" style="margin-top:1rem; width:100%">Annuler</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Autres Modals (Inchangés) -->
+    <div id="bexModal" class="modal"><div class="modal-content"><h3>Dossier BEX</h3><form id="bexForm"><div class="form-section"><div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;"><div><label>N° BEX</label><input type="text" name="numero_bex" required></div><div><label>Type</label><select name="type_bex"><option value="MARITIME">Maritime</option><option value="AERIEN">Aérien</option><option value="LOCAL">Local</option></select></div><div><label>Fournisseur</label><input type="text" name="fournisseur" required></div><div><label>Date</label><input type="date" name="date_enlevement_prevue" required></div></div></div><div class="form-section"><div class="section-title">Produit</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem"><div><label>Conteneur</label><input type="text" id="form_num_conteneur" required></div><div><label>Désignation</label><input type="text" id="form_designation" required></div><div><label>Quantité</label><input type="number" id="form_quantite" required></div><div><label>Facture</label><input type="number" id="form_facture" required></div></div></div><button type="submit" class="btn btn-primary" style="margin-top:2rem">Enregistrer</button></form></div></div>
+    <div id="adiModal" class="modal"><div class="modal-content"><h3>Nouvelle ADI</h3><form id="adiForm"><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem"><div><label>N° ADI</label><input type="text" name="numero_adi" required></div><div><label>Fournisseur</label><input type="text" name="fournisseur" required></div><div><label>Pays</label><input type="text" name="pays" required></div><div><label>Date</label><input type="date" name="date" required></div></div><button type="submit" class="btn btn-primary" style="margin-top:2rem">Enregistrer</button></form></div></div>
+    <div id="ccpqModal" class="modal"><div class="modal-content"><h3>Nouveau CCPQ</h3><form id="ccpqForm"><div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem"><div><label>N° CCPQ</label><input type="text" name="numero_ccpq" required></div><div><label>Date Dépôt</label><input type="date" name="date_depot" required></div></div><button type="submit" class="btn btn-primary" style="margin-top:2rem">Enregistrer</button></form></div></div>
+    <div id="detailsModal" class="modal"><div class="modal-content" style="max-width:900px"><div style="display:flex;justify-content:space-between;align-items:start"><div><h3 id="det_bex_no">BEX-XXXX</h3><p id="det_bex_fournisseur" style="color:#94a3b8"></p></div><button onclick="hideModal('detailsModal')" class="btn btn-secondary">Fermer</button></div><div class="form-section"><div class="section-title">Produits</div><div class="table-wrap"><table><thead><tr><th>Conteneur</th><th>Désignation</th><th>Qté</th><th>Facture</th></tr></thead><tbody id="det_items_table"></tbody></table></div></div><div class="form-section" style="display:grid;grid-template-columns:1fr 1fr;gap:2rem"><div><div class="section-title">Documents</div><div id="det_documents_list"></div></div><div><div class="section-title">Upload</div><form id="uploadDocForm"><input type="hidden" id="upload_bex_id"><select id="upload_doc_type" required><option value="FACTURE">Facture</option><option value="ADI">ADI</option><option value="CCPQ">CCPQ</option><option value="REC165">REC165</option><option value="LIQUIDATION">Liquidation</option></select><input type="file" id="upload_doc_file" required><button type="submit" class="btn btn-primary" style="margin-top:1.5rem;width:100%">Uploader</button></form></div></div></div></div>
+    <div id="importModal" class="modal"><div class="modal-content"><h3 id="importTitle">Import Excel</h3><form id="importForm"><input type="hidden" id="import_type"><input type="file" id="excelFile" required><button type="submit" class="btn btn-primary" style="margin-top:1rem">Importer</button></form></div></div>
+    <div id="userModal" class="modal"><div class="modal-content"><h3>Nouveau Compte</h3><form id="userForm"><input type="text" name="username" placeholder="Username" required><input type="password" name="password" placeholder="Password" required><select name="role"><option value="AGENT">Agent</option><option value="CHEF_SERVICE">Chef Service</option><option value="ADMIN">Admin</option></select><button type="submit" class="btn btn-primary" style="margin-top:1rem">Créer</button></form></div></div>
+
+    <script>
+        let user = null;
+        const STATUS_OPTIONS = {
+            adi: [
+                {val: 'EN_ATTENTE', label: 'En attente'},
+                {val: 'SOUMIS', label: 'Soumis'},
+                {val: 'VALIDE', label: 'Validé'},
+                {val: 'REJETE', label: 'Rejeté'}
+            ],
+            ccpq: [
+                {val: 'NON_DEMARRE', label: 'Non démarré'},
+                {val: 'EN_ANALYSE', label: 'En analyse'},
+                {val: 'APPROUVE', label: 'Approuvé'},
+                {val: 'REJETE', label: 'Rejeté'}
+            ]
+        };
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Auth
+        document.getElementById('loginForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const res = await fetch('/api/login/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+                body: JSON.stringify({username: e.target.username.value, password: e.target.password.value})
+            });
+            if ((await res.json()).status === 'success') checkAuth();
+            else document.getElementById('loginError').classList.remove('hidden');
+        };
+
+        async function checkAuth() {
+            const res = await fetch('/api/me/');
+            if (res.ok) {
+                user = await res.json();
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('app').classList.remove('hidden');
+                document.getElementById('welcomeText').textContent = `Bonjour, ${user.first_name || user.username}`;
+                document.getElementById('userRoleText').textContent = user.role_display;
+                if (user.role === 'ADMIN') document.getElementById('usersTabBtn').classList.remove('hidden');
+                loadData();
+            }
+        }
+
+        function loadData() { loadBex(); loadAdi(); loadCcpq(); if(user.role === 'ADMIN') loadUsers(); }
+
+        async function loadBex() {
+            const res = await fetch('/api/transit/bex/');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('bexTable').innerHTML = data.map(bex => `<tr><td><b>${bex.numero_bex}</b></td><td>${bex.type_bex}</td><td>${bex.fournisseur}</td><td>${new Date(bex.date_creation).toLocaleDateString()}</td><td><span class="badge ${bex.statut === 'EN_ATTENTE' ? 'status-pending' : 'status-success'}">${bex.statut}</span></td><td><button class="btn btn-secondary" style="padding:0.3rem" onclick="viewDetails(${bex.id})">Détails</button></td></tr>`).join('');
+        }
+
+        async function loadAdi() {
+            const res = await fetch('/api/transit/adi/');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('adiTable').innerHTML = data.map(adi => `<tr><td><b>${adi.numero_adi}</b></td><td>${adi.fournisseur || '-'}</td><td>${adi.pays || '-'}</td><td>${adi.date || '-'}</td><td><span class="badge ${adi.statut === 'VALIDE' ? 'status-success' : 'status-pending'}">${adi.statut}</span></td><td><button class="btn btn-secondary" style="padding:0.3rem" onclick="openStatusModal('adi', ${adi.id})">Statut</button></td></tr>`).join('');
+        }
+
+        async function loadCcpq() {
+            const res = await fetch('/api/transit/ccpq/');
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('ccpqTable').innerHTML = data.map(c => `<tr><td><b>${c.numero_ccpq}</b></td><td>${c.date_depot || '-'}</td><td>${c.resultat || '-'}</td><td><span class="badge ${c.statut === 'APPROUVE' ? 'status-success' : 'status-pending'}">${c.statut}</span></td><td><button class="btn btn-secondary" style="padding:0.3rem" onclick="openStatusModal('ccpq', ${c.id})">Statut</button></td></tr>`).join('');
+        }
+
+        // Status Modal
+        function openStatusModal(type, id) {
+            document.getElementById('status_type').value = type;
+            document.getElementById('status_id').value = id;
+            const select = document.getElementById('status_select');
+            select.innerHTML = STATUS_OPTIONS[type].map(opt => `<option value="${opt.val}">${opt.label}</option>`).join('');
+            showModal('statusModal');
+        }
+
+        document.getElementById('statusForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('status_type').value;
+            const id = document.getElementById('status_id').value;
+            const status = document.getElementById('status_select').value;
+            
+            const res = await fetch(`/api/transit/${type}/${id}/`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken')},
+                body: JSON.stringify({statut: status})
+            });
+            if (res.ok) { hideModal('statusModal'); loadData(); }
+        };
+
+        async function viewDetails(id) {
+            const res = await fetch(`/api/transit/bex/${id}/dossier-complet/`);
+            const bex = await res.json();
+            document.getElementById('det_bex_no').textContent = bex.numero_bex;
+            document.getElementById('det_bex_fournisseur').textContent = `Type : ${bex.type_bex} | Fournisseur : ${bex.fournisseur}`;
+            document.getElementById('upload_bex_id').value = bex.id;
+            document.getElementById('det_items_table').innerHTML = bex.items.map(item => `<tr><td>${item.numero_conteneur}</td><td>${item.designation_produit}</td><td>${item.quantite}</td><td>${item.facture_fcfa} FCFA</td></tr>`).join('');
+            document.getElementById('det_documents_list').innerHTML = bex.documents.map(doc => `<div class="doc-item"><span><b>${doc.type_document}</b></span><a href="${doc.fichier}" target="_blank" class="btn btn-secondary" style="font-size:0.7rem">Ouvrir</a></div>`).join('') || '<p style="color:#64748b">Aucun document.</p>';
+            showModal('detailsModal');
+        }
+
+        // Form Submissions (Inchangés)
+        document.getElementById('bexForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const payload = {
+                numero_bex: fd.get('numero_bex'), type_bex: fd.get('type_bex'), fournisseur: fd.get('fournisseur'),
+                date_enlevement_prevue: fd.get('date_enlevement_prevue'),
+                items: [{
+                    numero_conteneur: document.getElementById('form_num_conteneur').value,
+                    designation_produit: document.getElementById('form_designation').value,
+                    quantite: parseInt(document.getElementById('form_quantite').value),
+                    facture_fcfa: parseFloat(document.getElementById('form_facture').value)
+                }]
+            };
+            const res = await fetch('/api/transit/bex/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')}, body:JSON.stringify(payload)});
+            if (res.ok) { hideModal('bexModal'); loadBex(); e.target.reset(); }
+        };
+
+        document.getElementById('adiForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+            const res = await fetch('/api/transit/adi/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')}, body:JSON.stringify(data)});
+            if (res.ok) { hideModal('adiModal'); loadAdi(); e.target.reset(); }
+        };
+
+        document.getElementById('ccpqForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const data = Object.fromEntries(fd);
+            const res = await fetch('/api/transit/ccpq/', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')}, body:JSON.stringify(data)});
+            if (res.ok) { hideModal('ccpqModal'); loadCcpq(); e.target.reset(); }
+        };
+
+        document.getElementById('importForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('import_type').value;
+            const fd = new FormData(); fd.append('file', document.getElementById('excelFile').files[0]);
+            const res = await fetch(`/api/transit/${type}/import-excel/`, { method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}, body:fd });
+            if (res.ok) { hideModal('importModal'); loadData(); }
+        };
+
+        document.getElementById('uploadDocForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const bexId = document.getElementById('upload_bex_id').value;
+            const fd = new FormData();
+            fd.append('fichier', document.getElementById('upload_doc_file').files[0]);
+            fd.append('type_document', document.getElementById('upload_doc_type').value);
+            
+            const res = await fetch(`/api/transit/bex/${bexId}/upload-document/`, {
+                method: 'POST',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                body: fd
+            });
+            
+            if (res.ok) {
+                alert("Document uploadé avec succès !");
+                viewDetails(bexId); // Rafraîchir la vue détails
+                loadBex(); // Rafraîchir le tableau principal (pour le statut)
+            } else {
+                alert("Erreur lors de l'upload.");
+            }
+        };
+
+        function showImportModal(type) {
+            document.getElementById('import_type').value = type;
+            document.getElementById('importTitle').textContent = `Import Excel ${type.toUpperCase()}`;
+            showModal('importModal');
+        }
+
+        function switchTab(t) {
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`tab-${t}`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.innerText.toLowerCase().includes(t)));
+        }
+        function showModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function hideModal(id) { document.getElementById(id).style.display = 'none'; }
+        async function logout() { await fetch('/api/logout/', {method: 'POST', headers: {'X-CSRFToken': getCookie('csrftoken')}}); location.reload(); }
+        
+        checkAuth();
+    </script>
+</body>
+</html>
