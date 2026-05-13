@@ -190,8 +190,10 @@ CSRF_TRUSTED_ORIGINS = [
     "https://laborex-front-45of.vercel.app",
 ]
 
-# CSRF & Session Security for Frontend
-CSRF_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False  # Permet au JS de lire le cookie CSRF
+# CSRF & Session Security for Frontend (Cross-domain support)
+CSRF_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SAMESITE = 'None'
+CSRF_COOKIE_HTTPONLY = False
 SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
