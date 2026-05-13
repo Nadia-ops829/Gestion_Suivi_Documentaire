@@ -107,7 +107,12 @@ class ADIViewSet(viewsets.ModelViewSet):
         if not file: return Response({"error": "Fichier manquant"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             df = pd.read_excel(file)
+            # Normalisation des colonnes : on enlève les espaces et on met en majuscules
             df.columns = [str(c).strip().upper() for c in df.columns]
+            
+            # Gestion des cellules fusionnées (dates qui ne sont pas répétées sur chaque ligne)
+            df = df.ffill()
+            
             col_target = next((c for c in ['FACTURES', 'N° ADI', 'ADI', 'N°'] if c in df.columns), None)
             
             created_count = 0
@@ -116,16 +121,41 @@ class ADIViewSet(viewsets.ModelViewSet):
                     val = row.get(col_target)
                     if pd.isna(val) or str(val).strip() == "": continue
                     num = str(val).strip()
+                    
+                    # Nettoyage du coût (gestion du séparateur décimal virgule)
+                    cout_val = row.get('COUT', 0)
+                    if isinstance(cout_val, str):
+                        cout_val = cout_val.replace(',', '.').replace(' ', '')
+                    
+                    try:
+                        cout_val = float(cout_val)
+                    except (ValueError, TypeError):
+                        cout_val = 0
+
+                    # Nettoyage des dates pour éviter les erreurs NaT de pandas
+                    def clean_date(val):
+                        if pd.isna(val) or val is pd.NaT:
+                            return None
+                        return val
+
                     if not ADI.objects.filter(numero_adi=num).exists():
                         ADI.objects.create(
                             numero_adi=num,
-                            date=row.get('DATE DEPOT') or row.get('DATE'),
+                            factures=str(row.get('FACTURES', '')),
+                            nb_items=int(row.get('ITEMS', 0) or 0),
+                            quantite=int(row.get('QUANTITES', 0) or 0),
+                            asi=int(row.get('ASI', 0) or 0),
+                            cout=cout_val,
+                            date_depot=clean_date(row.get('DATE DEPOT')) or clean_date(row.get('DATE')),
+                            date_reception=clean_date(row.get('DATE RECEPTION')),
                             statut='EN_ATTENTE',
                             agent_createur=request.user
                         )
                         created_count += 1
             return Response({"message": f"Import réussi: {created_count} ADI"}, status=status.HTTP_201_CREATED)
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class CCPQViewSet(viewsets.ModelViewSet):
