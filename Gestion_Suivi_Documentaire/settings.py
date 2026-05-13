@@ -27,7 +27,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-vlu7&w^(sj+#g19p1ufo%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['miab-diplomachain.onrender.com', '127.0.0.1', 'localhost', '0.0.0.0', '192.168.1.95']
+ALLOWED_HOSTS = ['gestion-suivi-documentaire.onrender.com', '127.0.0.1', 'localhost', '0.0.0.0', '192.168.1.95']
 
 # Render external hostname
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
