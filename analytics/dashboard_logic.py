@@ -402,3 +402,79 @@ def calculate_dashboard_metrics(agent_id=None, periode=None, type_dossier=None):
             ]
         }
     }
+
+def generate_excel_report(agent_id=None, periode=None, type_dossier=None):
+    """
+    Generates a high-quality in-memory Excel file representing all dashboard metrics.
+    Includes active dossier summaries, late dossiers list, and trend details.
+    """
+    import io
+    import pandas as pd
+    
+    # Calculate real-time metrics
+    metrics = calculate_dashboard_metrics(agent_id=agent_id, periode=periode, type_dossier=type_dossier)
+    
+    # Create byte buffer
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # Sheet 1: Global Metrics
+        summary_data = {
+            'Indicateur Clé': [
+                'Total Dossiers Actifs (BEX + ADI + CCPQ)',
+                'BEX Actifs (Non dédouanés)',
+                'ADI Actifs (En attente / Soumis)',
+                'CCPQ Actifs (Non démarrés / En analyse)',
+                'Conteneurs Actifs (Suivi)',
+                'Nombre total de dossiers en retard',
+                'Taux de validation réglementaire (ce mois)',
+                'Délai moyen de traitement - BEX (ce mois)',
+                'Délai moyen de traitement - ADI (ce mois)',
+                'Délai moyen de traitement - CCPQ (ce mois)'
+            ],
+            'Valeur': [
+                metrics['total_active_dossiers'],
+                metrics['active_counts']['BEX'],
+                metrics['active_counts']['ADI'],
+                metrics['active_counts']['CCPQ'],
+                metrics['active_counts']['Conteneur'],
+                metrics['blocked_count'],
+                f"{metrics['validation_rate']}%",
+                f"{metrics['avg_delays']['BEX']} jours",
+                f"{metrics['avg_delays']['ADI']} jours",
+                f"{metrics['avg_delays']['CCPQ']} jours"
+            ]
+        }
+        pd.DataFrame(summary_data).to_excel(writer, sheet_name='Synthèse KPIs', index=False)
+        
+        # Sheet 2: Late Dossiers Table
+        late_rows = []
+        for d in metrics['late_dossiers_table']:
+            late_rows.append({
+                'N° Dossier': d['numero'],
+                'Type de Dossier': d['type'],
+                'Statut Actuel': d['statut'],
+                'Date Dépôt / Création': d['date_depot_creation'],
+                'Agent Responsable': d['agent_responsable'],
+                'Jours de Retard constatés': d['jours_retard'],
+                'Seuil SLA légal (jours)': d['seuil_limite']
+            })
+            
+        if not late_rows:
+            late_rows = [{'Message': 'Aucun dossier en retard ! Performance parfaite.'}]
+            
+        pd.DataFrame(late_rows).to_excel(writer, sheet_name='Dossiers en Retard', index=False)
+        
+        # Sheet 3: Monthly Statistics
+        bar_data = []
+        for x in metrics['charts']['grouped_bars']:
+            bar_data.append({
+                'Mois': x['month'],
+                'Dossiers traités - BEX': x['BEX'],
+                'Dossiers traités - ADI': x['ADI'],
+                'Dossiers traités - CCPQ': x['CCPQ']
+            })
+        pd.DataFrame(bar_data).to_excel(writer, sheet_name='Historique Mensuel', index=False)
+
+    output.seek(0)
+    return output

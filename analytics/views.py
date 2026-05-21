@@ -7,7 +7,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .dashboard_logic import calculate_dashboard_metrics
+from django.http import HttpResponse
+from .dashboard_logic import calculate_dashboard_metrics, generate_excel_report
 
 class DashboardDataAPIView(APIView):
     """
@@ -182,3 +183,55 @@ class PowerBIEmbedAPIView(APIView):
                 "et POWERBI_REPORT_ID pour activer l'intégration réelle avec Microsoft Azure."
             )
         }, status=status.HTTP_200_OK)
+
+
+class ExportExcelAPIView(APIView):
+    """
+    API endpoint pour télécharger le rapport du tableau de bord en fichier Excel (.xlsx).
+    Applique la même sécurité par rôle que le dashboard :
+      - AGENT : ne télécharge que ses propres statistiques.
+      - CHEF_SERVICE / ADMIN : peut télécharger les statistiques globales ou filtrées par agent.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from users.models import User
+
+        agent_id = request.query_params.get('agent_id')
+        periode = request.query_params.get('periode')
+        type_dossier = request.query_params.get('type_dossier')
+
+        # Sécurité par rôle : un Agent ne voit que ses propres données
+        if request.user.role == User.Role.AGENT:
+            agent_id = request.user.id
+
+        try:
+            if agent_id:
+                agent_id = int(agent_id)
+        except ValueError:
+            return Response(
+                {"error": "Le paramètre agent_id doit être un entier valide."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            excel_buffer = generate_excel_report(
+                agent_id=agent_id,
+                periode=periode,
+                type_dossier=type_dossier
+            )
+
+            response = HttpResponse(
+                excel_buffer.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename="Rapport_Dashboard_Laborex.xlsx"'
+            return response
+
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response(
+                {"error": f"Erreur lors de la génération du rapport Excel : {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
