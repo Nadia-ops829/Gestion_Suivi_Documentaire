@@ -12,5 +12,6 @@ urlpatterns = [
     path('api/', include(router.urls)),
     path('api/', include('users.urls')),
     path('api/transit/', include('transit.urls')),
+    path('api/analytics/', include('analytics.urls')),
     path('admin/', admin.site.urls),
 ]
