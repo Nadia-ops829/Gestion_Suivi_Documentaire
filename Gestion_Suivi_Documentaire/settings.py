@@ -188,6 +188,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://laborex-front-45of.vercel.app",
+    "https://laborex-front.vercel.app",
 ]
 
 # CSRF & Session Security for Frontend (Cross-domain support)
