@@ -256,7 +256,7 @@ class CCPQViewSet(viewsets.ModelViewSet):
             header_row_idx = 0
             for i, row in df_raw.iterrows():
                 row_str = ' '.join(str(x).upper() for x in row.values)
-                if 'DCQ' in row_str or 'CCPQ' in row_str or 'BEX' in row_str:
+                if 'DCQ' in row_str or 'FOB EURO' in row_str or 'SYLVIE' in row_str:
                     header_row_idx = i
                     break
             
