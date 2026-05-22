@@ -4,7 +4,7 @@ from .models import BEX, BEXItem, Conteneur, ADI, CCPQ, DocumentTransit
 class BEXItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = BEXItem
-        fields = ['id', 'numero_conteneur', 'designation_produit', 'quantite', 'facture_fcfa']
+        fields = '__all__'
 
 class ADISerializer(serializers.ModelSerializer):
     class Meta:
