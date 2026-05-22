@@ -23,6 +23,9 @@ class BEX(models.Model):
     date_creation = models.DateTimeField(auto_now_add=True)
     statut = models.CharField(max_length=25, choices=StatutBex.choices, default=StatutBex.EN_ATTENTE)
     
+    date_depart = models.DateField(null=True, blank=True)
+    date_arrivee = models.DateField(null=True, blank=True)
+    
     date_enlevement_prevue = models.DateField(null=True, blank=True)
     statut_douanier = models.CharField(max_length=50, default='En attente')
     observations = models.TextField(null=True, blank=True)
@@ -42,10 +45,17 @@ class BEX(models.Model):
 
 class BEXItem(models.Model):
     bex = models.ForeignKey(BEX, on_delete=models.CASCADE, related_name='items')
-    numero_conteneur = models.CharField(max_length=50)
-    designation_produit = models.TextField()
-    quantite = models.PositiveIntegerField()
-    facture_fcfa = models.DecimalField(max_digits=20, decimal_places=2)
+    numero_conteneur = models.CharField(max_length=50, null=True, blank=True)
+    designation_produit = models.TextField(null=True, blank=True)
+    quantite = models.PositiveIntegerField(null=True, blank=True)
+    facture_fcfa = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    
+    numero_facture = models.CharField(max_length=100, null=True, blank=True)
+    adi = models.CharField(max_length=50, null=True, blank=True)
+    asi = models.CharField(max_length=50, null=True, blank=True)
+    numero_sylvie = models.CharField(max_length=100, null=True, blank=True)
+    document = models.CharField(max_length=100, null=True, blank=True)
+    statut_item = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return f"{self.bex.numero_bex} - {self.designation_produit}"
@@ -90,6 +100,9 @@ class CCPQ(models.Model):
 
     numero_ccpq = models.CharField(max_length=50, unique=True)
     bex = models.ForeignKey(BEX, on_delete=models.CASCADE, related_name='ccpqs', null=True, blank=True)
+    numero_sylvie = models.CharField(max_length=100, null=True, blank=True)
+    fob_euro = models.DecimalField(max_digits=20, decimal_places=2, default=0, null=True, blank=True)
+    fob_fcfa = models.DecimalField(max_digits=20, decimal_places=2, default=0, null=True, blank=True)
     date_depot = models.DateField(null=True, blank=True)
     date_resultat = models.DateField(null=True, blank=True)
     resultat = models.TextField(null=True, blank=True)

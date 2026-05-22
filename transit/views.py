@@ -61,36 +61,116 @@ class BEXViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='import-excel', parser_classes=[MultiPartParser])
     def import_excel(self, request):
-        """Importation Excel flexible pour le format Proforma Maritime"""
+        """Importation Excel flexible pour le format BEX"""
         file = request.FILES.get('file')
         if not file: return Response({"error": "Fichier manquant"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            df = pd.read_excel(file)
-            df.columns = [str(c).strip().upper() for c in df.columns]
+            df_raw = pd.read_excel(file, header=None)
             
-            created_count = 0
-            with transaction.atomic():
+            bex_number = None
+            date_depart = None
+            date_arrivee = None
+            header_row_idx = 0
+            
+            # Extract header info (BEX, DATE DEPART, DATE ARRIVEE)
+            for i, row in df_raw.head(10).iterrows():
+                row_str = ' '.join(str(x).upper() for x in row.values)
+                if 'BEX' in row_str and not bex_number:
+                    # Find the cell containing the BEX number
+                    for val in row.values:
+                        if pd.notna(val) and str(val).strip().upper() != 'BEX':
+                            bex_number = str(val).strip()
+                            break
+                if 'DATE DEPART' in row_str and not date_depart:
+                    for val in row.values:
+                        if pd.notna(val) and str(val).strip().upper() != 'DATE DEPART':
+                            date_depart = val
+                            break
+                if 'DATE ARRIVEE' in row_str and not date_arrivee:
+                    for val in row.values:
+                        if pd.notna(val) and str(val).strip().upper() != 'DATE ARRIVEE':
+                            date_arrivee = val
+                            break
+                if 'NUMERO FACTURE' in row_str or 'NUMÉRO FACTURE' in row_str:
+                    header_row_idx = i
+                    
+            if not bex_number:
+                # Fallback: maybe it's the old format where BEX is a column
+                df = pd.read_excel(file)
+                df.columns = [str(c).strip().upper() for c in df.columns]
                 col_id = next((c for c in ['FACTURES', 'N° BEX', 'BEX', 'N°'] if c in df.columns), None)
                 if not col_id:
-                    return Response({"error": f"Colonnes non reconnues. Attendu 'FACTURES' ou 'N° BEX'."}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"error": "Numéro BEX introuvable dans le fichier."}, status=status.HTTP_400_BAD_REQUEST)
+                # ... fall back to old logic (we can just implement the new logic primarily)
+            
+            # Clean dates
+            def clean_date(val):
+                if pd.isna(val) or val is pd.NaT: return None
+                return val
 
-                for val_id, group in df.groupby(col_id):
-                    if pd.isna(val_id): continue
-                    bex, _ = BEX.objects.get_or_create(
-                        numero_bex=str(val_id),
-                        defaults={'fournisseur': 'Import Auto', 'agent_createur': request.user}
-                    )
-                    for _, row in group.iterrows():
-                        BEXItem.objects.create(
+            # Create or get BEX
+            if bex_number:
+                bex, created = BEX.objects.get_or_create(
+                    numero_bex=bex_number,
+                    defaults={
+                        'fournisseur': 'Import', 
+                        'agent_createur': request.user,
+                        'date_depart': clean_date(date_depart),
+                        'date_arrivee': clean_date(date_arrivee)
+                    }
+                )
+                if not created:
+                    if clean_date(date_depart): bex.date_depart = clean_date(date_depart)
+                    if clean_date(date_arrivee): bex.date_arrivee = clean_date(date_arrivee)
+                    bex.save()
+
+                # Process items
+                df = df_raw.iloc[header_row_idx+1:].copy()
+                df.columns = [str(c).strip().upper() for c in df_raw.iloc[header_row_idx]]
+                df = df.dropna(how='all')
+                
+                col_facture = next((c for c in df.columns if 'FACTURE' in c), None)
+                col_adi = next((c for c in df.columns if 'ADI' in c), None)
+                col_asi = next((c for c in df.columns if 'ASI' in c), None)
+                col_sylvie = next((c for c in df.columns if 'SYLVIE' in c), None)
+                col_doc = next((c for c in df.columns if 'DOCUMENT' in c), None)
+                col_statut = next((c for c in df.columns if 'STATUT' in c), None)
+                
+                item_count = 0
+                with transaction.atomic():
+                    # Optionnel: On peut vider les anciens items ou juste rajouter
+                    for _, row in df.iterrows():
+                        facture_val = str(row.get(col_facture)).strip() if col_facture and not pd.isna(row.get(col_facture)) else ""
+                        if not facture_val: continue
+                        
+                        adi_val = str(row.get(col_adi)).strip() if col_adi and not pd.isna(row.get(col_adi)) else ""
+                        asi_val = str(row.get(col_asi)).strip() if col_asi and not pd.isna(row.get(col_asi)) else ""
+                        sylvie_val = str(row.get(col_sylvie)).strip() if col_sylvie and not pd.isna(row.get(col_sylvie)) else ""
+                        doc_val = str(row.get(col_doc)).strip() if col_doc and not pd.isna(row.get(col_doc)) else ""
+                        statut_val = str(row.get(col_statut)).strip() if col_statut and not pd.isna(row.get(col_statut)) else ""
+                        
+                        # Use get_or_create to avoid duplicates if re-importing
+                        BEXItem.objects.get_or_create(
                             bex=bex,
-                            numero_conteneur='N/A',
-                            designation_produit=f"Produit Facture {val_id}",
-                            quantite=row.get('QUANTITES', 0) or row.get('QUANTITÉ', 0),
-                            facture_fcfa=row.get('COUT', 0) or 0
+                            numero_facture=facture_val,
+                            defaults={
+                                'adi': adi_val,
+                                'asi': asi_val,
+                                'numero_sylvie': sylvie_val,
+                                'document': doc_val,
+                                'statut_item': statut_val,
+                                'designation_produit': f"Facture {facture_val}"
+                            }
                         )
-                    created_count += 1
-            return Response({"message": f"Import réussi: {created_count} dossiers"}, status=status.HTTP_201_CREATED)
+                        item_count += 1
+                        
+                return Response({"message": f"Import BEX {bex_number} réussi avec {item_count} lignes factures."}, status=status.HTTP_201_CREATED)
+            else:
+                return Response({"error": "Format non reconnu."}, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class ADIViewSet(viewsets.ModelViewSet):
@@ -169,25 +249,86 @@ class CCPQViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='import-excel', parser_classes=[MultiPartParser])
     def import_excel(self, request):
         file = request.FILES.get('file')
+        if not file: return Response({"error": "Fichier manquant"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            df = pd.read_excel(file)
-            df.columns = [str(c).strip().upper() for c in df.columns]
-            col_target = next((c for c in ['FACTURES', 'N° CCPQ', 'CCPQ', 'N°'] if c in df.columns), None)
+            # Read without headers first to dynamically find the header row
+            df_raw = pd.read_excel(file, header=None)
+            header_row_idx = 0
+            for i, row in df_raw.iterrows():
+                row_str = ' '.join(str(x).upper() for x in row.values)
+                if 'DCQ' in row_str or 'CCPQ' in row_str or 'BEX' in row_str:
+                    header_row_idx = i
+                    break
             
+            # Set columns
+            df = df_raw.iloc[header_row_idx+1:].copy()
+            df.columns = [str(c).strip().upper() for c in df_raw.iloc[header_row_idx]]
+            
+            # Clean dataframe (remove empty rows)
+            df = df.dropna(how='all')
+
+            col_target = next((c for c in df.columns if 'DCQ' in c or 'CCPQ' in c and 'SYLVIE' not in c), None)
+            if not col_target:
+                return Response({"error": "Colonne N°DCQ ou N°CCPQ introuvable dans le fichier."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            col_bex = next((c for c in df.columns if 'BEX' in c), None)
+            col_sylvie = next((c for c in df.columns if 'SYLVIE' in c), None)
+            col_euro = next((c for c in df.columns if 'EURO' in c), None)
+            col_fcfa = next((c for c in df.columns if 'FCFA' in c), None)
+
             created_count = 0
+            updated_count = 0
             with transaction.atomic():
                 for _, row in df.iterrows():
                     val = row.get(col_target)
                     if pd.isna(val) or str(val).strip() == "": continue
                     num = str(val).strip()
-                    if not CCPQ.objects.filter(numero_ccpq=num).exists():
-                        CCPQ.objects.create(
-                            numero_ccpq=num, 
-                            date_depot=row.get('DATE DEPOT'), 
-                            statut='NON_DEMARRE',
-                            agent_createur=request.user
-                        )
+
+                    # Find and link BEX if possible
+                    bex_obj = None
+                    if col_bex and not pd.isna(row.get(col_bex)):
+                        bex_val = str(row.get(col_bex)).strip()
+                        # Si le BEX correspond exactement à un numéro en base
+                        bex_obj = BEX.objects.filter(numero_bex=bex_val).first()
+
+                    # Clean decimal values
+                    def clean_decimal(val):
+                        if pd.isna(val): return 0
+                        val_str = str(val).replace(',', '.').replace(' ', '').replace('\xa0', '')
+                        try: return float(val_str)
+                        except: return 0
+
+                    euro_val = clean_decimal(row.get(col_euro)) if col_euro else 0
+                    fcfa_val = clean_decimal(row.get(col_fcfa)) if col_fcfa else 0
+                    sylvie_val = str(row.get(col_sylvie)).strip() if col_sylvie and not pd.isna(row.get(col_sylvie)) else ""
+
+                    ccpq, created = CCPQ.objects.get_or_create(
+                        numero_ccpq=num,
+                        defaults={
+                            'bex': bex_obj,
+                            'numero_sylvie': sylvie_val,
+                            'fob_euro': euro_val,
+                            'fob_fcfa': fcfa_val,
+                            'statut': 'NON_DEMARRE',
+                            'agent_createur': request.user
+                        }
+                    )
+                    
+                    if created:
                         created_count += 1
-            return Response({"message": f"Import réussi: {created_count} CCPQ"})
+                    else:
+                        # Update existing CCPQ
+                        ccpq.numero_sylvie = sylvie_val
+                        ccpq.fob_euro = euro_val
+                        ccpq.fob_fcfa = fcfa_val
+                        if bex_obj and not ccpq.bex:
+                            ccpq.bex = bex_obj
+                        ccpq.save()
+                        updated_count += 1
+
+            return Response({"message": f"Import réussi: {created_count} créés, {updated_count} mis à jour."}, status=status.HTTP_201_CREATED)
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
