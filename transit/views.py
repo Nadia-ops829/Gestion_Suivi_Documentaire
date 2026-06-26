@@ -8,10 +8,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
 
-from .models import BEX, BEXItem, Conteneur, ADI, CCPQ, DocumentTransit
+from .models import BEX, BEXItem, Conteneur, ADI, CCPQ, DocumentTransit, FactureProforma
 from .serializers import (
     BEXSerializer, BEXDossierCompletSerializer, 
-    DocumentTransitSerializer, ADISerializer, CCPQSerializer
+    DocumentTransitSerializer, ADISerializer, CCPQSerializer, FactureProformaSerializer
 )
 from users.models import User
 from users.permissions import get_visible_objects, CanManageTransit, IsChefService
@@ -332,3 +332,87 @@ class CCPQViewSet(viewsets.ModelViewSet):
             print(traceback.format_exc())
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class FactureProformaViewSet(viewsets.ModelViewSet):
+    queryset = FactureProforma.objects.all()
+    serializer_class = FactureProformaSerializer
+    permission_classes = [IsAuthenticated, IsChefService]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    search_fields = ['reference']
+
+    def perform_create(self, serializer):
+        serializer.save(agent_createur=self.request.user)
+
+    @action(detail=False, methods=['post'], url_path='import-excel', parser_classes=[MultiPartParser])
+    def import_excel(self, request):
+        """Importation Excel pour le suivi des factures et pro-formas"""
+        file = request.FILES.get('file')
+        if not file: return Response({"error": "Fichier manquant"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            df_raw = pd.read_excel(file, header=None)
+            header_row_idx = 0
+            for i, row in df_raw.iterrows():
+                row_str = ' '.join(str(x).upper() for x in row.values)
+                if 'RÉF' in row_str or 'REF' in row_str or 'FACTURE' in row_str:
+                    header_row_idx = i
+                    break
+            
+            df = df_raw.iloc[header_row_idx+1:].copy()
+            df.columns = [str(c).strip().upper() for c in df_raw.iloc[header_row_idx]]
+            df = df.dropna(how='all')
+
+            created_count = 0
+            updated_count = 0
+            with transaction.atomic():
+                for _, row in df.iterrows():
+                    col_ref = next((c for c in df.columns if 'RÉF' in c or 'REF' in c or 'FACTURE' in c and 'COUT' not in c and 'COÛT' not in c), None)
+                    col_nb_item = next((c for c in df.columns if 'NOMBRE' in c and 'ITEM' in c), None)
+                    col_qte = next((c for c in df.columns if 'QUANTIT' in c), None)
+                    col_asi = next((c for c in df.columns if 'ASI' in c), None)
+                    col_adi = next((c for c in df.columns if 'ADI' in c), None)
+                    col_cout = next((c for c in df.columns if 'COUT' in c or 'COÛT' in c), None)
+
+                    if not col_ref: continue
+                    val_ref = row.get(col_ref)
+                    if pd.isna(val_ref) or str(val_ref).strip() == "": continue
+                    
+                    ref = str(val_ref).strip()
+
+                    def safe_int(val):
+                        if pd.isna(val): return 0
+                        try: return int(float(str(val).replace(' ', '')))
+                        except: return 0
+
+                    def safe_float(val):
+                        if pd.isna(val): return 0
+                        try: return float(str(val).replace(',', '.').replace(' ', ''))
+                        except: return 0
+
+                    nb_item = safe_int(row.get(col_nb_item)) if col_nb_item else 0
+                    qte = safe_int(row.get(col_qte)) if col_qte else 0
+                    asi = safe_int(row.get(col_asi)) if col_asi else 0
+                    adi = safe_int(row.get(col_adi)) if col_adi else 0
+                    cout = safe_float(row.get(col_cout)) if col_cout else 0
+
+                    obj, created = FactureProforma.objects.update_or_create(
+                        reference=ref,
+                        defaults={
+                            'nombre_item': nb_item,
+                            'quantite_produits': qte,
+                            'items_asi': asi,
+                            'items_adi': adi,
+                            'cout_facture': cout,
+                            'agent_createur': request.user
+                        }
+                    )
+                    if created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
+
+            return Response({
+                "message": f"Import réussi: {created_count} factures créées, {updated_count} mises à jour."
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

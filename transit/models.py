@@ -137,6 +137,23 @@ class DocumentTransit(models.Model):
         parent = self.bex.numero_bex if self.bex else (self.conteneur.numero_conteneur if self.conteneur else "N/A")
         return f"{self.type_document} - {parent}"
 
+class FactureProforma(models.Model):
+    reference = models.CharField(max_length=255, unique=True, verbose_name="Référence des factures ou pro-forma")
+    nombre_item = models.PositiveIntegerField(default=0, verbose_name="Nombre d'item")
+    quantite_produits = models.PositiveIntegerField(default=0, verbose_name="Quantités de produits")
+    items_asi = models.PositiveIntegerField(default=0, verbose_name="Items ASI")
+    items_adi = models.PositiveIntegerField(default=0, verbose_name="Items ADI")
+    cout_facture = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name="Coût/facture (EURO)")
+    date_creation = models.DateTimeField(auto_now_add=True)
+    agent_createur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return self.reference
+
+    class Meta:
+        verbose_name = "Facture ou Pro-forma"
+        verbose_name_plural = "Factures et Pro-formas"
+
 # Signaux pour les automatismes
 from django.db.models.signals import post_save
 from django.dispatch import receiver

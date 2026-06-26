@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import BEX, BEXItem, Conteneur, ADI, CCPQ, DocumentTransit
+from .models import BEX, BEXItem, Conteneur, ADI, CCPQ, DocumentTransit, FactureProforma
 
 class BEXItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -53,3 +53,9 @@ class BEXDossierCompletSerializer(serializers.ModelSerializer):
     class Meta:
         model = BEX
         fields = '__all__'
+
+class FactureProformaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FactureProforma
+        fields = '__all__'
+
