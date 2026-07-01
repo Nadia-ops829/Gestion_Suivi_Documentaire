@@ -41,17 +41,42 @@ def logout_view(request):
     logout(request)
     return JsonResponse({'status': 'success', 'message': 'Déconnecté avec succès.'})
 
+@csrf_exempt
 @login_required
 def me_view(request):
     user = request.user
-    return JsonResponse({
-        'username': user.username,
-        'email': user.email,
-        'role': user.role,
-        'role_display': user.get_role_display(),
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-    })
+    
+    if request.method == 'GET':
+        return JsonResponse({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'role_display': user.get_role_display(),
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'is_active': user.is_active,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+            'last_login': user.last_login.isoformat() if user.last_login else None,
+        })
+        
+    if request.method == 'PUT':
+        try:
+            data = json.loads(request.body)
+            user.first_name = data.get('first_name', user.first_name)
+            user.last_name = data.get('last_name', user.last_name)
+            user.email = data.get('email', user.email)
+            
+            # Modification du mot de passe
+            if 'password' in data and data['password']:
+                user.set_password(data['password'])
+                
+            user.save()
+            return JsonResponse({'status': 'success', 'message': 'Profil mis à jour avec succès.'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+            
+    return JsonResponse({'status': 'error', 'message': 'Méthode non autorisée.'}, status=405)
 
 @csrf_exempt
 @login_required
@@ -91,4 +116,59 @@ def unlock_user_view(request):
             return JsonResponse({'status': 'success', 'message': f'Utilisateur {user_to_unlock.username} débloqué.'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    return JsonResponse({'status': 'error', 'message': 'Méthode non autorisée.'}, status=405)
+
+@csrf_exempt
+@login_required
+def user_profile_view(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    
+    # Lecture du profil
+    if request.method == 'GET':
+        # Restriction : Un agent normal ne voit que lui-même
+        if request.user.role == User.Role.AGENT and request.user.id != user.id:
+            return JsonResponse({'status': 'error', 'message': 'Accès non autorisé.'}, status=403)
+
+        return JsonResponse({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'role_display': user.get_role_display(),
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'is_active': user.is_active,
+            'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+            'last_login': user.last_login.isoformat() if user.last_login else None,
+            'failed_login_attempts': user.failed_login_attempts,
+        })
+        
+    # Mise à jour du profil
+    if request.method == 'PUT':
+        # Restriction : Seul l'utilisateur lui-même ou l'admin peut modifier
+        if request.user.id != user.id and request.user.role != User.Role.ADMIN:
+            return JsonResponse({'status': 'error', 'message': 'Accès non autorisé.'}, status=403)
+            
+        try:
+            data = json.loads(request.body)
+            user.first_name = data.get('first_name', user.first_name)
+            user.last_name = data.get('last_name', user.last_name)
+            user.email = data.get('email', user.email)
+            
+            # Seul l'admin peut modifier le rôle ou le statut
+            if request.user.role == User.Role.ADMIN:
+                if 'role' in data:
+                    user.role = data['role']
+                if 'is_active' in data:
+                    user.is_active = data['is_active']
+            
+            # Modification du mot de passe
+            if 'password' in data and data['password']:
+                user.set_password(data['password'])
+                
+            user.save()
+            return JsonResponse({'status': 'success', 'message': 'Profil mis à jour.'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+            
     return JsonResponse({'status': 'error', 'message': 'Méthode non autorisée.'}, status=405)
