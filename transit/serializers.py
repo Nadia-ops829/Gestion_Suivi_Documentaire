@@ -5,6 +5,7 @@ class BEXItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = BEXItem
         fields = '__all__'
+        read_only_fields = ['bex']
 
 class ADISerializer(serializers.ModelSerializer):
     alerte_retard = serializers.ReadOnlyField()
