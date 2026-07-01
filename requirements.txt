@@ -10,3 +10,5 @@ whitenoise
 dj-database-url
 python-dotenv
 requests
+cloudinary
+django-cloudinary-storage
