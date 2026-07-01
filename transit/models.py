@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
 
 class BEX(models.Model):
     class TypeBex(models.TextChoices):
@@ -35,6 +37,31 @@ class BEX(models.Model):
     pharmacien = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='bex_pointes')
     date_reception_rsi = models.DateTimeField(null=True, blank=True)
     rsi = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='bex_receptionnes')
+
+    @property
+    def alerte_retard(self):
+        if self.type_bex not in [self.TypeBex.AERIEN, self.TypeBex.MARITIME]:
+            return None
+            
+        start_date = self.date_depart if self.date_depart else self.date_creation.date()
+        
+        if self.type_bex == self.TypeBex.AERIEN:
+            deadline = start_date + timedelta(days=30)
+        else:
+            deadline = start_date + timedelta(days=60)
+            
+        today = timezone.now().date()
+        days_remaining = (deadline - today).days
+        
+        if self.statut in [self.StatutBex.DEDOUANE, self.StatutBex.RECEPTIONNE]:
+            return {'statut': 'TERMINE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+
+        if days_remaining < 0:
+            return {'statut': 'DEPASSE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+        elif days_remaining <= 7:
+            return {'statut': 'PROCHE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+        else:
+            return {'statut': 'NORMAL', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
 
     def __str__(self):
         return f"{self.numero_bex} ({self.fournisseur})"
@@ -88,6 +115,25 @@ class ADI(models.Model):
     observations = models.TextField(null=True, blank=True)
     statut = models.CharField(max_length=20, choices=StatutADI.choices, default=StatutADI.EN_ATTENTE)
     agent_createur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='adis_crees')
+
+    @property
+    def alerte_retard(self):
+        if not self.date_depot:
+            return None
+            
+        deadline = self.date_depot + timedelta(days=5)
+        today = timezone.now().date()
+        days_remaining = (deadline - today).days
+        
+        if self.statut in [self.StatutADI.VALIDE, self.StatutADI.REJETE]:
+            return {'statut': 'TERMINE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+
+        if days_remaining < 0:
+            return {'statut': 'DEPASSE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+        elif days_remaining <= 2:
+            return {'statut': 'PROCHE', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
+        else:
+            return {'statut': 'NORMAL', 'jours_restants': days_remaining, 'deadline': deadline.isoformat()}
 
     def __str__(self): return self.numero_adi
 

@@ -7,6 +7,7 @@ class BEXItemSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ADISerializer(serializers.ModelSerializer):
+    alerte_retard = serializers.ReadOnlyField()
     class Meta:
         model = ADI
         fields = '__all__'
@@ -30,6 +31,7 @@ class ConteneurSerializer(serializers.ModelSerializer):
 class BEXSerializer(serializers.ModelSerializer):
     items = BEXItemSerializer(many=True, required=False)
     agent_createur_name = serializers.ReadOnlyField(source='agent_createur.username')
+    alerte_retard = serializers.ReadOnlyField()
 
     class Meta:
         model = BEX
@@ -49,6 +51,7 @@ class BEXDossierCompletSerializer(serializers.ModelSerializer):
     adis = ADISerializer(many=True, read_only=True)
     ccpqs = CCPQSerializer(many=True, read_only=True)
     documents = DocumentTransitSerializer(many=True, read_only=True)
+    alerte_retard = serializers.ReadOnlyField()
     
     class Meta:
         model = BEX
