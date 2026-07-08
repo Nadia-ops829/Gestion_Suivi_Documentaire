@@ -92,7 +92,7 @@ def calculate_dashboard_metrics(agent_id=None, periode=None, type_dossier=None):
         ccpq_qs = ccpq_qs.filter(agent_createur_id=agent_id)
         conteneur_qs = conteneur_qs.filter(bex__agent_createur_id=agent_id)
         
-    # 3. Apply Period Filter
+    # 3. Apply Period Filter (Utilisé pour les moyennes et taux, PAS pour le backlog actif/bloqué)
     start_date = None
     if periode:
         if periode == 'semaine':
@@ -101,12 +101,6 @@ def calculate_dashboard_metrics(agent_id=None, periode=None, type_dossier=None):
             start_date = now - timedelta(days=30)
         elif periode == 'trimestre':
             start_date = now - timedelta(days=90)
-            
-        if start_date:
-            bex_qs = bex_qs.filter(date_creation__gte=start_date)
-            adi_qs = adi_qs.filter(date_depot__gte=start_date.date())
-            ccpq_qs = ccpq_qs.filter(date_depot__gte=start_date.date())
-            conteneur_qs = conteneur_qs.filter(bex__date_creation__gte=start_date)
 
     # 4. Count Active Dossiers (Uncompleted dossiers count)
     active_bex_count = bex_qs.exclude(statut__in=['DEDOUANE', 'PRET_RECEPTION']).count()
@@ -199,32 +193,32 @@ def calculate_dashboard_metrics(agent_id=None, periode=None, type_dossier=None):
             
     blocked_count = len(blocked_list)
     
-    # 6. Average Processing Time (Délai moyen de traitement ce mois)
-    first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    # 6. Average Processing Time (Délai moyen de traitement sur la période)
+    period_start = start_date if start_date else now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # BEX completed this month
+    # BEX completed in period
     completed_bex = bex_qs.filter(statut__in=['DEDOUANE', 'PRET_RECEPTION'])
     bex_durations = []
     for bex in completed_bex:
         comp_date = get_bex_completion_date(bex)
-        if comp_date and comp_date >= first_day_of_month:
+        if comp_date and comp_date >= period_start:
             dur = max(0, (comp_date - bex.date_creation).days)
             bex_durations.append(dur)
             
-    # ADIs completed this month
+    # ADIs completed in period
     completed_adis = adi_qs.filter(
         statut__in=['VALIDE', 'REJETE'],
-        date_reception__gte=first_day_of_month.date()
+        date_reception__gte=period_start.date()
     )
     adi_durations = []
     for adi in completed_adis:
         dur = get_adi_processing_days(adi)
         adi_durations.append(dur)
         
-    # CCPQs completed this month
+    # CCPQs completed in period
     completed_ccpqs = ccpq_qs.filter(
         statut__in=['APPROUVE', 'REJETE'],
-        date_resultat__gte=first_day_of_month.date()
+        date_resultat__gte=period_start.date()
     )
     ccpq_durations = []
     for ccpq in completed_ccpqs:
